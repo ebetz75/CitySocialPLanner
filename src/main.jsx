@@ -7,11 +7,11 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const createItem = (type, overrides = {}) => ({
   id: crypto.randomUUID(),
   type,
-  label: type === 'round' ? 'Round table' : 'Rectangle',
+  label: type === 'round' ? 'Round table' : type === 'text' ? 'Area label' : 'Rectangle',
   x: 120,
   y: 120,
-  w: type === 'round' ? 5 : 8,
-  h: type === 'round' ? 5 : 4,
+  w: type === 'round' ? 5 : type === 'text' ? 10 : 8,
+  h: type === 'round' ? 5 : type === 'text' ? 2 : 4,
   angle: 0,
   color: `hsl(${Math.random() * 360} 70% 82%)`,
   ...overrides,
@@ -19,8 +19,8 @@ const createItem = (type, overrides = {}) => ({
 
 const serializeState = (items, pxPerFoot) => JSON.stringify({ items, pxPerFoot });
 
-const drawBackgroundImage = (context, image, width, height) => {
-  if (!image) return;
+const getImageViewport = (image, width, height) => {
+  if (!image) return null;
 
   const imageRatio = image.width / image.height;
   const canvasRatio = width / height;
@@ -40,7 +40,13 @@ const drawBackgroundImage = (context, image, width, height) => {
     offsetX = (width - drawWidth) / 2;
   }
 
-  context.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+  return { x: offsetX, y: offsetY, width: drawWidth, height: drawHeight };
+};
+
+const drawBackgroundImage = (context, image, width, height) => {
+  const viewport = getImageViewport(image, width, height);
+  if (!viewport) return;
+  context.drawImage(image, 0, 0, image.width, image.height, viewport.x, viewport.y, viewport.width, viewport.height);
 };
 
 const getItemBounds = (item, pxPerFoot) => ({
@@ -142,8 +148,10 @@ function PlannerApp() {
     const width = Math.max(1, Math.round(rect.width));
     const height = Math.max(1, Math.round(rect.height));
 
-    canvas.width = width;
-    canvas.height = height;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
     context.clearRect(0, 0, width, height);
 
     if (backgroundImage) {
@@ -189,6 +197,10 @@ function PlannerApp() {
         context.arc(0, 0, radius, 0, Math.PI * 2);
         context.fill();
         context.stroke();
+      } else if (item.type === 'text') {
+        context.fillStyle = isSelected ? 'rgba(254, 243, 199, 0.95)' : 'rgba(255, 251, 235, 0.9)';
+        context.fillRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
+        context.strokeRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
       } else {
         context.fillRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
         context.strokeRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
@@ -196,7 +208,7 @@ function PlannerApp() {
       context.restore();
 
       context.save();
-      context.font = '600 12px Inter, sans-serif';
+      context.font = item.type === 'text' ? '700 14px Inter, sans-serif' : '600 12px Inter, sans-serif';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       context.fillStyle = '#111827';
@@ -224,9 +236,9 @@ function PlannerApp() {
   const addItem = React.useCallback((type, config = {}) => {
     const draftType = type || libraryDraft.type;
     const nextItem = createItem(draftType, {
-      label: config.label || (draftType === 'round' ? 'Round table' : 'Rectangle'),
-      w: Number(config.width ?? (draftType === 'round' ? 5 : libraryDraft.width || 8)),
-      h: Number(config.height ?? (draftType === 'round' ? 5 : libraryDraft.height || 4)),
+      label: config.label || (draftType === 'round' ? 'Round table' : draftType === 'text' ? 'Area label' : 'Rectangle'),
+      w: Number(config.width ?? (draftType === 'round' ? 5 : draftType === 'text' ? 10 : libraryDraft.width || 8)),
+      h: Number(config.height ?? (draftType === 'round' ? 5 : draftType === 'text' ? 2 : libraryDraft.height || 4)),
     });
     const nextItems = [...items, nextItem];
     setItems(nextItems);
@@ -254,11 +266,18 @@ function PlannerApp() {
 
   const dragState = React.useRef(null);
 
-  const handlePointerDown = React.useCallback((event) => {
+  const getCanvasPoint = React.useCallback((event) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    return {
+      x: (event.clientX - rect.left) * (canvas.width / rect.width),
+      y: (event.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }, []);
+
+  const handlePointerDown = React.useCallback((event) => {
+    const canvas = canvasRef.current;
+    const { x, y } = getCanvasPoint(event);
 
     if (scaleMode) {
       setScaleDraft((prev) => {
@@ -295,14 +314,12 @@ function PlannerApp() {
       setSelectedId(null);
       dragState.current = null;
     }
-  }, [items, pxPerFoot, pushHistory, scaleMode, scaleValue]);
+  }, [getCanvasPoint, items, pxPerFoot, scaleMode]);
 
   const handlePointerMove = React.useCallback((event) => {
     if (!dragState.current) return;
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const { x, y } = getCanvasPoint(event);
 
     const activeItem = items.find((item) => item.id === dragState.current.itemId);
     if (!activeItem) return;
@@ -323,7 +340,7 @@ function PlannerApp() {
         y: clamp(nextY, 0, canvas.height - item.h * pxPerFoot),
       };
     }));
-  }, [items, pxPerFoot, snapToGrid]);
+  }, [getCanvasPoint, items, pxPerFoot, snapToGrid]);
 
   const handlePointerUp = React.useCallback(() => {
     if (dragState.current) {
@@ -547,6 +564,11 @@ function PlannerApp() {
                     height: libraryDraft.width,
                   })}>Add round</button>
                 </div>
+                <button className="btn" onClick={() => addItem('text', {
+                  label: libraryDraft.label || 'Area label',
+                  width: 10,
+                  height: 2,
+                })}>Add text box</button>
               </div>
             </section>
 
