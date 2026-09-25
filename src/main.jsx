@@ -138,9 +138,9 @@ function PlannerApp() {
     if (!canvas) return;
     const context = canvas.getContext('2d');
 
-    const rect = canvas.parentElement.getBoundingClientRect();
-    const width = Math.max(800, rect.width - 16);
-    const height = Math.max(620, rect.height - 16 || 620);
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
 
     canvas.width = width;
     canvas.height = height;
@@ -378,9 +378,9 @@ function PlannerApp() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const resize = () => {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      const width = Math.max(800, rect.width - 16);
-      const height = Math.max(620, rect.height - 16 || 620);
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
       canvas.width = width;
       canvas.height = height;
       draw();
@@ -420,7 +420,7 @@ function PlannerApp() {
         .field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; color: #374151; font-size: 0.82rem; }
         .input { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 9px 10px; font-size: 0.95rem; }
         .canvas-wrap { position: relative; background: white; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden; min-height: 720px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04); }
-        canvas { display: block; width: 100%; height: 100%; min-height: 720px; background: #fafafa; cursor: crosshair; }
+        canvas { display: block; width: 100%; height: 720px; background: #fafafa; cursor: crosshair; }
         .statusbar { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #6b7280; font-size: 0.8rem; flex-wrap: wrap; }
         .badge { display: inline-flex; align-items: center; padding: 6px 10px; background: #f3f4f6; border-radius: 999px; color: #374151; font-weight: 600; }
         .hidden { display: none !important; }
@@ -429,7 +429,7 @@ function PlannerApp() {
         .modal-card h3 { margin: 0 0 10px; font-size: 1.4rem; }
         .modal-card p { margin: 0 0 16px; color: #6b7280; }
         .modal-actions { margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px; }
-        @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .canvas-wrap, canvas { min-height: 520px; } }
+        @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .canvas-wrap { min-height: 520px; } canvas { height: 520px; } }
       `}</style>
 
       <div className="planner-app">
