@@ -19,6 +19,30 @@ const createItem = (type, overrides = {}) => ({
 
 const serializeState = (items, pxPerFoot) => JSON.stringify({ items, pxPerFoot });
 
+const drawBackgroundImage = (context, image, width, height) => {
+  if (!image) return;
+
+  const imageRatio = image.width / image.height;
+  const canvasRatio = width / height;
+
+  let drawWidth;
+  let drawHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (imageRatio > canvasRatio) {
+    drawWidth = width;
+    drawHeight = width / imageRatio;
+    offsetY = (height - drawHeight) / 2;
+  } else {
+    drawHeight = height;
+    drawWidth = height * imageRatio;
+    offsetX = (width - drawWidth) / 2;
+  }
+
+  context.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+};
+
 const getItemBounds = (item, pxPerFoot) => ({
   x: item.x,
   y: item.y,
@@ -44,10 +68,7 @@ function PlannerApp() {
   const fileInputRef = React.useRef(null);
   const loadInputRef = React.useRef(null);
 
-  const [items, setItems] = React.useState([
-    createItem('rectangle', { x: 180, y: 180, w: 8, h: 4, label: 'Stage' }),
-    createItem('round', { x: 470, y: 220, w: 6, h: 6, label: 'Dance Floor' }),
-  ]);
+  const [items, setItems] = React.useState([]);
   const [selectedId, setSelectedId] = React.useState(null);
   const [snapToGrid, setSnapToGrid] = React.useState(true);
   const [pxPerFoot, setPxPerFoot] = React.useState(28);
@@ -55,6 +76,12 @@ function PlannerApp() {
   const [scaleDraft, setScaleDraft] = React.useState([]);
   const [scaleValue, setScaleValue] = React.useState('10');
   const [scaleModalOpen, setScaleModalOpen] = React.useState(false);
+  const [libraryDraft, setLibraryDraft] = React.useState({
+    type: 'rectangle',
+    label: 'Rectangle',
+    width: 8,
+    height: 4,
+  });
   const [history, setHistory] = React.useState([serializeState(items, pxPerFoot)]);
   const [redoStack, setRedoStack] = React.useState([]);
   const [backgroundImage, setBackgroundImage] = React.useState(null);
@@ -120,7 +147,7 @@ function PlannerApp() {
     context.clearRect(0, 0, width, height);
 
     if (backgroundImage) {
-      context.drawImage(backgroundImage, 0, 0, width, height);
+      drawBackgroundImage(context, backgroundImage, width, height);
     }
 
     if (snapToGrid) {
@@ -194,13 +221,18 @@ function PlannerApp() {
     draw();
   }, [draw]);
 
-  const addItem = React.useCallback((type) => {
-    const nextItem = createItem(type);
+  const addItem = React.useCallback((type, config = {}) => {
+    const draftType = type || libraryDraft.type;
+    const nextItem = createItem(draftType, {
+      label: config.label || (draftType === 'round' ? 'Round table' : 'Rectangle'),
+      w: Number(config.width ?? (draftType === 'round' ? 5 : libraryDraft.width || 8)),
+      h: Number(config.height ?? (draftType === 'round' ? 5 : libraryDraft.height || 4)),
+    });
     const nextItems = [...items, nextItem];
     setItems(nextItems);
     setSelectedId(nextItem.id);
     pushHistory(nextItems, pxPerFoot);
-  }, [items, pxPerFoot, pushHistory]);
+  }, [items, libraryDraft, pxPerFoot, pushHistory]);
 
   const updateSelectedItem = React.useCallback((changes) => {
     if (!selectedItem) return;
@@ -232,18 +264,9 @@ function PlannerApp() {
       setScaleDraft((prev) => {
         const next = [...prev, { x, y }];
         if (next.length === 2) {
-          const [a, b] = next;
-          const distance = Math.hypot(b.x - a.x, b.y - a.y);
-          const feet = Number(scaleValue) || 10;
-          if (feet > 0 && distance > 0) {
-            const nextPx = distance / feet;
-            setPxPerFoot(nextPx);
-            setScaleMode(false);
-            setScaleDraft([]);
-            setScaleModalOpen(false);
-            pushHistory(items, nextPx);
-          }
-          return [];
+          setScaleMode(false);
+          setScaleModalOpen(true);
+          return next;
         }
         return next;
       });
@@ -440,7 +463,12 @@ function PlannerApp() {
                   reader.readAsDataURL(file);
                 }} />
 
-                <button className="btn" onClick={() => { setScaleDraft([]); setScaleMode(true); setScaleModalOpen(true); }}>
+                <button className="btn" onClick={() => {
+                  setScaleDraft([]);
+                  setScaleValue('10');
+                  setScaleMode(true);
+                  setScaleModalOpen(false);
+                }}>
                   Define scale
                 </button>
 
@@ -453,9 +481,72 @@ function PlannerApp() {
 
             <section className="panel">
               <h2>Library</h2>
-              <div className="grid2">
-                <button className="btn" onClick={() => addItem('rectangle')}>Rectangle</button>
-                <button className="btn" onClick={() => addItem('round')}>Round</button>
+              <div className="stack">
+                <label className="field">
+                  <span>Library type</span>
+                  <select
+                    className="input"
+                    value={libraryDraft.type}
+                    onChange={(event) => setLibraryDraft((prev) => ({ ...prev, type: event.target.value }))}
+                  >
+                    <option value="rectangle">Rectangle</option>
+                    <option value="round">Round</option>
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Label</span>
+                  <input
+                    className="input"
+                    value={libraryDraft.label}
+                    onChange={(event) => setLibraryDraft((prev) => ({ ...prev, label: event.target.value }))}
+                  />
+                </label>
+
+                <div className="grid2">
+                  <label className="field">
+                    <span>{libraryDraft.type === 'round' ? 'Diameter' : 'Width'}</span>
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      value={libraryDraft.type === 'round' ? libraryDraft.width : libraryDraft.width}
+                      onChange={(event) => {
+                        const value = clamp(Number(event.target.value) || 1, 1, 80);
+                        setLibraryDraft((prev) => ({ ...prev, width: value, height: prev.type === 'round' ? value : prev.height }));
+                      }}
+                    />
+                  </label>
+
+                  {libraryDraft.type !== 'round' && (
+                    <label className="field">
+                      <span>Height</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        value={libraryDraft.height}
+                        onChange={(event) => {
+                          const value = clamp(Number(event.target.value) || 1, 1, 80);
+                          setLibraryDraft((prev) => ({ ...prev, height: value }));
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                <div className="grid2">
+                  <button className="btn" onClick={() => addItem('rectangle', {
+                    label: libraryDraft.label,
+                    width: libraryDraft.width,
+                    height: libraryDraft.height,
+                  })}>Add rectangle</button>
+                  <button className="btn" onClick={() => addItem('round', {
+                    label: libraryDraft.label,
+                    width: libraryDraft.width,
+                    height: libraryDraft.width,
+                  })}>Add round</button>
+                </div>
               </div>
             </section>
 
@@ -582,7 +673,11 @@ function PlannerApp() {
               onChange={(event) => setScaleValue(event.target.value)}
             />
             <div className="modal-actions">
-              <button className="btn" onClick={() => { setScaleMode(false); setScaleDraft([]); setScaleModalOpen(false); }}>
+              <button className="btn" onClick={() => {
+                setScaleMode(false);
+                setScaleDraft([]);
+                setScaleModalOpen(false);
+              }}>
                 Cancel
               </button>
               <button className="btn primary" onClick={() => {
