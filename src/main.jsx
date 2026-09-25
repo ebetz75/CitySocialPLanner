@@ -635,17 +635,6 @@ function PlannerApp() {
             >
               <canvas
                 ref={canvasRef}
-                onPointerDown={(event) => {
-                  if (!selectedItem) return;
-                  const rect = canvasRef.current.getBoundingClientRect();
-                  const x = event.clientX - rect.left;
-                  const y = event.clientY - rect.top;
-                  dragState.current = {
-                    itemId: selectedItem.id,
-                    offsetX: x - selectedItem.x,
-                    offsetY: y - selectedItem.y,
-                  };
-                }}
               />
             </div>
 
