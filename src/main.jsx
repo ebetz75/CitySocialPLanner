@@ -216,9 +216,6 @@ function PlannerApp() {
         const lines = String(item.label || '').split('\n');
         const lineHeight = clamp(Number(item.fontSize) || 14, 8, 72) * 1.2;
         const firstLineY = y + itemHeight / 2 - ((lines.length - 1) * lineHeight) / 2;
-        context.beginPath();
-        context.rect(x, y, itemWidth, itemHeight);
-        context.clip();
         lines.forEach((line, index) => {
           context.fillText(line, x + itemWidth / 2, firstLineY + index * lineHeight, itemWidth);
         });
