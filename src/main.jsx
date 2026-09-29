@@ -14,6 +14,7 @@ const createItem = (type, overrides = {}) => ({
   h: type === 'round' ? 5 : type === 'text' ? 2 : 4,
   angle: 0,
   color: `hsl(${Math.random() * 360} 70% 82%)`,
+  ...(type === 'text' ? { fontSize: 14 } : {}),
   ...overrides,
 });
 
@@ -183,36 +184,47 @@ function PlannerApp() {
       const { x, y, width: itemWidth, height: itemHeight } = getItemBounds(item, pxPerFoot);
       const isSelected = item.id === selectedId;
 
-      context.save();
-      context.translate(x + itemWidth / 2, y + itemHeight / 2);
-      context.rotate((item.angle || 0) * (Math.PI / 180));
+      if (item.type !== 'text') {
+        context.save();
+        context.translate(x + itemWidth / 2, y + itemHeight / 2);
+        context.rotate((item.angle || 0) * (Math.PI / 180));
+        context.fillStyle = item.color;
+        context.strokeStyle = isSelected ? '#2563eb' : '#1f2937';
+        context.lineWidth = isSelected ? 3 : 1.5;
 
-      context.fillStyle = item.color;
-      context.strokeStyle = isSelected ? '#2563eb' : '#1f2937';
-      context.lineWidth = isSelected ? 3 : 1.5;
-
-      if (item.type === 'round') {
-        const radius = Math.min(itemWidth, itemHeight) / 2;
-        context.beginPath();
-        context.arc(0, 0, radius, 0, Math.PI * 2);
-        context.fill();
-        context.stroke();
-      } else if (item.type === 'text') {
-        context.fillStyle = isSelected ? 'rgba(254, 243, 199, 0.95)' : 'rgba(255, 251, 235, 0.9)';
-        context.fillRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
-        context.strokeRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
-      } else {
-        context.fillRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
-        context.strokeRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
+        if (item.type === 'round') {
+          const radius = Math.min(itemWidth, itemHeight) / 2;
+          context.beginPath();
+          context.arc(0, 0, radius, 0, Math.PI * 2);
+          context.fill();
+          context.stroke();
+        } else {
+          context.fillRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
+          context.strokeRect(-itemWidth / 2, -itemHeight / 2, itemWidth, itemHeight);
+        }
+        context.restore();
       }
-      context.restore();
 
       context.save();
-      context.font = item.type === 'text' ? '700 14px Inter, sans-serif' : '600 12px Inter, sans-serif';
+      context.font = item.type === 'text'
+        ? `700 ${clamp(Number(item.fontSize) || 14, 8, 72)}px Inter, sans-serif`
+        : '600 12px Inter, sans-serif';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       context.fillStyle = '#111827';
-      context.fillText(item.label || '', x + itemWidth / 2, y + itemHeight / 2);
+      if (item.type === 'text') {
+        const lines = String(item.label || '').split('\n');
+        const lineHeight = clamp(Number(item.fontSize) || 14, 8, 72) * 1.2;
+        const firstLineY = y + itemHeight / 2 - ((lines.length - 1) * lineHeight) / 2;
+        context.beginPath();
+        context.rect(x, y, itemWidth, itemHeight);
+        context.clip();
+        lines.forEach((line, index) => {
+          context.fillText(line, x + itemWidth / 2, firstLineY + index * lineHeight, itemWidth);
+        });
+      } else {
+        context.fillText(item.label || '', x + itemWidth / 2, y + itemHeight / 2);
+      }
       context.restore();
     });
 
@@ -574,16 +586,41 @@ function PlannerApp() {
 
             {selectedItem && (
               <section className="panel">
-                <h2>Inspector</h2>
+                <h2>Edit selected item</h2>
                 <div className="stack">
                   <label className="field">
-                    <span>Label</span>
-                    <input
-                      className="input"
-                      value={selectedItem.label}
-                      onChange={(event) => updateSelectedItem({ label: event.target.value })}
-                    />
+                    <span>{selectedItem.type === 'text' ? 'Text' : 'Label'}</span>
+                    {selectedItem.type === 'text' ? (
+                      <textarea
+                        className="input"
+                        rows="3"
+                        value={selectedItem.label}
+                        onChange={(event) => updateSelectedItem({ label: event.target.value })}
+                      />
+                    ) : (
+                      <input
+                        className="input"
+                        value={selectedItem.label}
+                        onChange={(event) => updateSelectedItem({ label: event.target.value })}
+                      />
+                    )}
                   </label>
+
+                  {selectedItem.type === 'text' && (
+                    <label className="field">
+                      <span>Font size</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="8"
+                        max="72"
+                        value={selectedItem.fontSize || 14}
+                        onChange={(event) => updateSelectedItem({
+                          fontSize: clamp(Number(event.target.value) || 14, 8, 72),
+                        })}
+                      />
+                    </label>
+                  )}
 
                   <div className="grid2">
                     <label className="field">
